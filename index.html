@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Police Chase</title>
+  <style>
+    :html, body { height: 100%; }
+    * { box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: #0b1020; font-family: system-ui, sans-serif; color: white; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+    #ui { position: fixed; inset: 20px 20px auto; display: flex; justify-content: space-between; pointer-events: none; text-shadow: 0 2px 4px #000; }
+    #ui strong { color: #ffd166; }
+  </style>
+</head>
+<body>
+  <canvas id="game" aria-label="A car escape game"></canvas>
+  <div id="ui"><div>Score: <strong id="score">0</strong></div><div id="status">Arrows/WASD to move</div></div>
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const statusEl = document.getElementById('status');
+
+    let w, h, player, police, keys, score, running, speed, spawnTimer;
+
+    function resize() {
+      w = canvas.width = innerWidth * devicePixelRatio;
+      h = canvas.height = innerHeight * devicePixelRatio;
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      w = innerWidth; h = innerHeight;
+    }
+
+    function reset() {
+      player = { x: w / 2, y: h / 2, r: 18, angle: 0 };
+      police = [];
+      keys = {};
+      score = 0;
+      speed = 2.5;
+      spawnTimer = 0;
+      running = true;
+      statusEl.textContent = 'Arrows/WASD to move';
+    }
+
+    function spawnPolice() {
+      const edge = Math.floor(Math.random() * 4);
+      let x, y;
+      if (edge === 0) { x = Math.random() * w; y = -30; }
+      if (edge === 1) { x = w + 30; y = Math.random() * h; }
+      if (edge === 2) { x = Math.random() * w; y = h + 30; }
+      if (edge === 3) { x = -30; y = Math.random() * h; }
+      police.push({ x, y, r: 19, angle: 0 });
+    }
+
+    function update(dt) {
+      if (!running) return;
+      const dx = (keys.ArrowRight || keys.d ? 1 : 0) - (keys.ArrowLeft || keys.a ? 1 : 0);
+      const dy = (keys.ArrowDown || keys.s ? 1 : 0) - (keys.ArrowUp || keys.w ? 1 : 0);
+      const len = Math.hypot(dx, dy) || 1;
+      player.x += dx / len * 4.3 * dt;
+      player.y += dy / len * 4.3 * dt;
+      player.x = Math.max(player.r, Math.min(w - player.r, player.x));
+      player.y = Math.max(player.r, Math.min(h - player.r, player.y));
+      if (dx || dy) player.angle = Math.atan2(dy, dx);
+
+      speed = Math.min(5.8, 2.5 + score / 900);
+      spawnTimer -= dt;
+      if (spawnTimer <= 0) {
+        spawnPolice();
+        spawnTimer = Math.max(24, 80 - score / 25);
+      }
+
+      for (const cop of police) {
+        const vx = player.x - cop.x;
+        const vy = player.y - cop.y;
+        const d = Math.hypot(vx, vy) || 1;
+        cop.x += vx / d * speed * dt;
+        cop.y += vy / d * speed * dt;
+        cop.angle = Math.atan2(vy, vx);
+        if (d < player.r + cop.r) {
+          running = false;
+          statusEl.textContent = 'Caught! Press Space to retry';
+        }
+      }
+
+      score += dt;
+      scoreEl.textContent = Math.floor(score);
+    }
+
+    function drawCar(x, y, angle, policeCar) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.fillStyle = policeCar ? '#e9eef5' : '#ffd166';
+      ctx.strokeStyle = policeCar ? '#111827' : '#b86b00';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.roundRect(-20, -12, 40, 24, 7);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#26344d';
+      ctx.fillRect(-7, -10, 14, 20);
+      if (policeCar) {
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(-5, -12, 5, 24);
+        ctx.fillStyle = '#3b82f6';
+        ctx.fillRect(0, -12, 5, 24);
+      }
+      ctx.restore();
+    }
+
+    function drawRoad() {
+      ctx.fillStyle = '#17243a'; ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(255,255,255,.12)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([20, 24]);
+      ctx.beginPath(); ctx.moveTo(w / 2, 0); ctx.lineTo(w / 2, h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    function loop() {
+      update(1);
+      drawRoad();
+      for (const cop of police) drawCar(cop.x, cop.y, cop.angle, true);
+      drawCar(player.x, player.y, player.angle, false);
+      requestAnimationFrame(loop);
+    }
+
+    addEventListener('resize', resize);
+    addEventListener('keydown', e => {
+      keys[e.key] = true;
+      if (e.key === ' ') { e.prevent;
+        if (!running) reset(); }
+      if (e.key === ' ') e.preventDefault();
+    });
+    addEventListener('keyup', e => { keys[e.key] = false; });
+
+    resize(); reset(); loop();
+  </script>
+</body>
+</html>
